@@ -1,0 +1,9 @@
+{
+	"name": "datafactorylearningtest-ws",
+	"location": "ukwest",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "7a6db502-bb24-428f-9467-cc088b7f3baa",
+		"tenantId": "e5518d6c-71a3-4521-884b-38d6eb4fc1d7"
+	}
+}
