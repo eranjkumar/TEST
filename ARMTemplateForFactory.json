@@ -1,0 +1,5099 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "datafactorylearning-ws"
+		},
+		"LS_AZURE_DATA_LAKE_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'LS_AZURE_DATA_LAKE'"
+		},
+		"LS_SNOWFLAKE_V2_password": {
+			"type": "secureString",
+			"metadata": "Secure string for 'password' of 'LS_SNOWFLAKE_V2'"
+		},
+		"LS_AZURE_DATA_LAKE_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://mylearning1dl.dfs.core.windows.net/"
+		},
+		"LS_SNOWFLAKE_V2_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "FIRST_DB"
+		},
+		"LS_SNOWFLAKE_V2_properties_typeProperties_role": {
+			"type": "string",
+			"defaultValue": "ACCOUNTADMIN"
+		},
+		"LS_SNOWFLAKE_V2_properties_typeProperties_host": {
+			"type": "string",
+			"defaultValue": "TBKOFHT-MTB84290.snowflakecomputing.com"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_COPY_ALL_FILES')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get Metadata",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_ALL_FILE_IN_RAW",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					},
+					{
+						"name": "ForEach",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get Metadata').output.childItems",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "Set variable1",
+									"type": "SetVariable",
+									"dependsOn": [],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "JSON_FILE_NAME",
+										"value": {
+											"value": "@item().name",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "If Condition1",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "Set variable1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@contains(variables('JSON_FILE_NAME'),'.json')",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "Copy Raw To Bronze",
+												"type": "Copy",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "JsonSource",
+														"storeSettings": {
+															"type": "AzureBlobFSReadSettings",
+															"recursive": true,
+															"enablePartitionDiscovery": false
+														},
+														"formatSettings": {
+															"type": "JsonReadSettings"
+														}
+													},
+													"sink": {
+														"type": "JsonSink",
+														"storeSettings": {
+															"type": "AzureBlobFSWriteSettings"
+														},
+														"formatSettings": {
+															"type": "JsonWriteSettings"
+														}
+													},
+													"enableStaging": false
+												},
+												"inputs": [
+													{
+														"referenceName": "DC_CP_ALL_JSON",
+														"type": "DatasetReference",
+														"parameters": {
+															"P_FILE_NAME": {
+																"value": "@item().name",
+																"type": "Expression"
+															}
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "CP_ALL_BRONZE",
+														"type": "DatasetReference",
+														"parameters": {}
+													}
+												]
+											}
+										]
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"variables": {
+					"JSON_FILE_NAME": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-28T12:05:46Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ALL_FILE_IN_RAW')]",
+				"[concat(variables('factoryId'), '/datasets/DC_CP_ALL_JSON')]",
+				"[concat(variables('factoryId'), '/datasets/CP_ALL_BRONZE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_COPY_LATEST_FILE')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "GetFileList",
+						"type": "GetMetadata",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_ALL_FILE_IN_RAW",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "DelimitedTextReadSettings"
+							}
+						}
+					},
+					{
+						"name": "ForEachFiles",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetFileList",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('GetFileList').output.childItems",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "GetMetadataEachFile",
+									"type": "GetMetadata",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "DS_LIST_FILE_RAW",
+											"type": "DatasetReference",
+											"parameters": {
+												"FILE_NAME": {
+													"value": "@item().name",
+													"type": "Expression"
+												}
+											}
+										},
+										"fieldList": [
+											"lastModified"
+										],
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true,
+											"enablePartitionDiscovery": false
+										},
+										"formatSettings": {
+											"type": "JsonReadSettings"
+										}
+									}
+								},
+								{
+									"name": "IfIsLatest",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "GetMetadataEachFile",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@greater(\n  activity('GetMetadataEachFile').output.lastModified,\n  variables('PREVIOUS_LAST_MODIFIED_DATE')\n)",
+											"type": "Expression"
+										},
+										"ifTrueActivities": [
+											{
+												"name": "SetLatestFileName",
+												"type": "SetVariable",
+												"dependsOn": [],
+												"policy": {
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"variableName": "LATEST_FILE_NAME",
+													"value": {
+														"value": "@item().name",
+														"type": "Expression"
+													}
+												}
+											},
+											{
+												"name": "LatestFileLastModified",
+												"type": "SetVariable",
+												"dependsOn": [
+													{
+														"activity": "SetLatestFileName",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"variableName": "PREVIOUS_LAST_MODIFIED_DATE",
+													"value": {
+														"value": "@activity('GetMetadataEachFile').output.lastModified",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "CopyLastestFile",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "ForEachFiles",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_LATEST_FILES",
+								"type": "DatasetReference",
+								"parameters": {
+									"SRS_FILE_NAME": {
+										"value": "@variables('LATEST_FILE_NAME')",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_LATEST_FILE_BRONZE",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"variables": {
+					"LATEST_FILE_NAME": {
+						"type": "String"
+					},
+					"PREVIOUS_LAST_MODIFIED_DATE": {
+						"type": "String",
+						"defaultValue": "1900-01-01T00:00:00Z"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-28T13:34:52Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ALL_FILE_IN_RAW')]",
+				"[concat(variables('factoryId'), '/datasets/DS_LATEST_FILES')]",
+				"[concat(variables('factoryId'), '/datasets/DS_LATEST_FILE_BRONZE')]",
+				"[concat(variables('factoryId'), '/datasets/DS_LIST_FILE_RAW')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_CP_AZURE_SNOWFLAKE')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "DF_CP_SNOW_TO_SNOW_TEST",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "Wait1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "DF_CP_SNOW_TO_SNOW_TEST",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"source1": {},
+									"sink1": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "DF_CP_AZURE_SNOW_ITEM",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "Wait1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "DF_CP_AZURE_SNOW_ITEM",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SRS": {},
+									"TGT": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "Wait1",
+						"description": "This is just a dummy activity",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "Get Metadata Of The File",
+						"type": "GetMetadata",
+						"dependsOn": [
+							{
+								"activity": "Wait1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataset": {
+								"referenceName": "DS_LIST_FILE_BRONZE",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"fieldList": [
+								"childItems",
+								"itemName",
+								"itemType",
+								"lastModified"
+							],
+							"storeSettings": {
+								"type": "AzureBlobFSReadSettings",
+								"recursive": true,
+								"enablePartitionDiscovery": false
+							},
+							"formatSettings": {
+								"type": "ParquetReadSettings"
+							}
+						}
+					},
+					{
+						"name": "If Condition1",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata Of The File",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Get Metadata Of The File').output.childItems[1].type, 'File')\n",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "Copy Bronze To Silver",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "ParquetSource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"wildcardFileName": "*.parquet",
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "ParquetReadSettings"
+											}
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "DS_LIST_FILE_BRONZE",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "DS_LIST_FILE_SILVER",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									]
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-24T12:44:13Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/DF_CP_SNOW_TO_SNOW_TEST')]",
+				"[concat(variables('factoryId'), '/dataflows/DF_CP_AZURE_SNOW_ITEM')]",
+				"[concat(variables('factoryId'), '/datasets/DS_LIST_FILE_BRONZE')]",
+				"[concat(variables('factoryId'), '/datasets/DS_LIST_FILE_SILVER')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_DF_CP_ALL_LKP_ADLS_SNOW')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "PARAM_CONFIG_TABLE",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "SnowflakeV2Source",
+								"query": "SELECT * FROM MICSTAG.PARAM_CONFIG_TABLE ORDER BY TABLE_NAME",
+								"exportSettings": {
+									"type": "SnowflakeExportCopyCommand"
+								}
+							},
+							"dataset": {
+								"referenceName": "PARAM_CONFIG_TABLE",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEachFile",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "PARAM_CONFIG_TABLE",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('PARAM_CONFIG_TABLE').output.value",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "DF_CP_ALL_LKP_ADLS_SNOW",
+									"type": "ExecuteDataFlow",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataflow": {
+											"referenceName": "DF_CP_ALL_LKP_ADLS_SNOW",
+											"type": "DataFlowReference",
+											"parameters": {},
+											"datasetParameters": {
+												"SrcAllLkpFiles": {
+													"FILE_NAME": {
+														"value": "@item().FILE_NAME",
+														"type": "Expression"
+													}
+												},
+												"TgtAllLkpTables": {
+													"TABLE_NAME": {
+														"value": "@item().TABLE_NAME",
+														"type": "Expression"
+													},
+													"SCHEMA_NAME": {
+														"value": "@item().SCHEMA_NAME",
+														"type": "Expression"
+													}
+												}
+											}
+										},
+										"staging": {},
+										"compute": {
+											"coreCount": 16,
+											"computeType": "General"
+										},
+										"traceLevel": "Fine"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-28T17:25:24Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/PARAM_CONFIG_TABLE')]",
+				"[concat(variables('factoryId'), '/dataflows/DF_CP_ALL_LKP_ADLS_SNOW')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_DF_CP_M_SELLING_INVENTORY_STAG')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "DF_CP_M_SELLING_INVENTORY_STAG",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [
+							{
+								"activity": "SetVariableLastLoadedDate",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "DF_CP_M_SELLING_INVENTORY_STAG",
+								"type": "DataFlowReference",
+								"parameters": {
+									"DF_LAST_LOADED_DATE": {
+										"value": "'@{variables('LAST_LOADED_DATE')}'",
+										"type": "Expression"
+									}
+								},
+								"datasetParameters": {
+									"SOURCE": {},
+									"TAREGT": {},
+									"TargetParamFile": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					},
+					{
+						"name": "LookupParamFile",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "JsonSource",
+								"storeSettings": {
+									"type": "AzureBlobFSReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "JsonReadSettings"
+								}
+							},
+							"dataset": {
+								"referenceName": "DS_ETL_LAST_RUN",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "SetVariableLastLoadedDate",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "LookupParamFile",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "LAST_LOADED_DATE",
+							"value": {
+								"value": "@activity('LookupParamFile').output.firstRow.LAST_LOADED_DATE",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"variables": {
+					"LAST_LOADED_DATE": {
+						"type": "String"
+					}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-28T13:29:53Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/DF_CP_M_SELLING_INVENTORY_STAG')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ETL_LAST_RUN')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_DF_CUSTOMER_SCDTYPE2_LOAD')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "DF_CUSTOMER_SCDTYPE2_LOAD",
+						"type": "ExecuteDataFlow",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"dataflow": {
+								"referenceName": "DF_CUSTOMER_SCDTYPE2_LOAD",
+								"type": "DataFlowReference",
+								"parameters": {},
+								"datasetParameters": {
+									"SOURCE": {},
+									"CustomerTraget": {},
+									"InsertNewRecordTGT": {},
+									"UpdateOldRecordTGT": {},
+									"InsertChangedRecordTGT": {}
+								}
+							},
+							"staging": {},
+							"compute": {
+								"coreCount": 8,
+								"computeType": "General"
+							},
+							"traceLevel": "Fine"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-26T07:29:51Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/dataflows/DF_CUSTOMER_SCDTYPE2_LOAD')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_ITEM_INVREAMENTAL_LOAD')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Wait1",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2025-12-26T12:43:36Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_TESTING')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Wait1",
+						"type": "Wait",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					},
+					{
+						"name": "Wait2",
+						"type": "Wait",
+						"dependsOn": [
+							{
+								"activity": "Wait1",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"waitTimeInSeconds": 1
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/CP_ALL_BRONZE')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "bronze"
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/CUSTOMER_STG')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "CUSTOMER_ID",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "CUSTOMER_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_CITY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ADDRESS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CONTACT_NUMBER",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "EMAIL_ID",
+						"type": "VARCHAR"
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "CUSTOMER_STG"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/CUSTOMER_TARGET')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "CUSTOMER_ID",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "CUSTOMER_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_CITY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ADDRESS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CONTACT_NUMBER",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "EMAIL_ID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUST_EFF_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "CUST_END_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "IS_ACTIVE",
+						"type": "VARCHAR"
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "CUSTOMER_TARGET"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DC_CP_ALL_JSON')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"P_FILE_NAME": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().P_FILE_NAME",
+							"type": "Expression"
+						},
+						"fileSystem": "raw"
+					}
+				},
+				"schema": {
+					"type": "object",
+					"properties": {
+						"constructorId": {
+							"type": "integer"
+						},
+						"constructorRef": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"nationality": {
+							"type": "string"
+						},
+						"url": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ALL_FILE_IN_RAW')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_SYSTEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_CMG_ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_PLANT_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_STORAGE_LOCATION",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_BATCH_NO",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS_KEY",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STOCK_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "UNIT_OF_MEASURE",
+						"type": "String"
+					},
+					{
+						"name": "LOADED_FLAG",
+						"type": "String"
+					},
+					{
+						"name": "AI_UOM_QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "ACTIVE_INGREDIENT_UOM",
+						"type": "String"
+					},
+					{
+						"name": "QC_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "DEFAULT_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "VENDOR_CODE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS",
+						"type": "String"
+					},
+					{
+						"name": "ERP_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXTERNAL_SYSTEM_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "AVAILABLE_DATE",
+						"type": "String"
+					},
+					{
+						"name": "MIC_PROCESS_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXPIRY_DATE",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ALL_LKP_ADLS')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"FILE_NAME": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FILE_NAME",
+							"type": "Expression"
+						},
+						"folderPath": "LKP_FILE",
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ALL_LKP_SNOW')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"TABLE_NAME": {
+						"type": "string"
+					},
+					"SCHEMA_NAME": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().SCHEMA_NAME",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().TABLE_NAME",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_ETL_LAST_RUN')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "ETL_LAST_RUN.json",
+						"folderPath": "PARAM",
+						"fileSystem": "bronze"
+					}
+				},
+				"schema": {
+					"type": "object",
+					"properties": {
+						"LAST_LOADED_DATE": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_LATEST_FILES')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"SRS_FILE_NAME": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().SRS_FILE_NAME",
+							"type": "Expression"
+						},
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_SYSTEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_CMG_ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_PLANT_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_STORAGE_LOCATION",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_BATCH_NO",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS_KEY",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STOCK_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "UNIT_OF_MEASURE",
+						"type": "String"
+					},
+					{
+						"name": "LOADED_FLAG",
+						"type": "String"
+					},
+					{
+						"name": "AI_UOM_QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "ACTIVE_INGREDIENT_UOM",
+						"type": "String"
+					},
+					{
+						"name": "QC_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "DEFAULT_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "VENDOR_CODE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS",
+						"type": "String"
+					},
+					{
+						"name": "ERP_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXTERNAL_SYSTEM_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "AVAILABLE_DATE",
+						"type": "String"
+					},
+					{
+						"name": "MIC_PROCESS_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXPIRY_DATE",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_LATEST_FILE_BRONZE')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"folderPath": "TEMP",
+						"fileSystem": "bronze"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_LIST_FILE_BRONZE')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "bronze"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": [
+					{
+						"name": "ITEMID",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL4MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL4MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL3MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL3MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL2MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL2MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL1MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL1MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRSUPPLYTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRORIGITEM",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRVERSION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UNITCOST",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "ISNEWITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ITEMCLASS",
+						"type": "UTF8"
+					},
+					{
+						"name": "HANDLINGINSTRUCTIONCODE",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMFAMILYGROUP",
+						"type": "UTF8"
+					},
+					{
+						"name": "VOLUME",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "UNITSPERPALLET",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "ITEMPRIORITYATTRIB",
+						"type": "UTF8"
+					},
+					{
+						"name": "UNITCONV1",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV2",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV3",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV4",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "GROSSWEIGHT",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "BASEUOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "USEDYNDEPFROMITEMLOCDEPLOYMENTPARAM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "USETRANSPORTCOSTFROMDYNDEPSRC",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "DYNDEPDECIMALS",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPOPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPPUSHOPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPQTY",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "OPTIONCLASS",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMSOURCINGSTRATEGY",
+						"type": "UTF8"
+					},
+					{
+						"name": "OPTIONS",
+						"type": "UTF8"
+					},
+					{
+						"name": "DISABLENETTINGPLANNING",
+						"type": "UTF8"
+					},
+					{
+						"name": "ISSHORTLIFECYCLEITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ISPARENTITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TA",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVEPRINCIPLE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CONTAINER",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MARKET",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MFGSOURCE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKSIZE",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PHARMAFORM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODUCTTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ITEMSTATUS",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_EQUNITS",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_BRAND",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TADESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BRANDDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_STRENGTHDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MP_RELEVANT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FAMILY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CORPDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SOPSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TPREGION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DIVISION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MULTIDEST",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_MULTISOURCE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_BRANDPRIO",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_ITEMEXCEPTION",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACK_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PROD_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_API_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPSNAME",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GROUPING",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_NBUNITSPERHNDLG",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERPALLET",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERLAYER",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKMODULE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_STORAGECONDITION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP2",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP3",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP4",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CREATEDBY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CREATIONDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDBY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FACTOR",
+						"type": "DECIMAL",
+						"precision": 14,
+						"scale": 4
+					},
+					{
+						"name": "UDC_ACTIVITY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CRITICITY",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NPISW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SIZETOBRAND",
+						"type": "DECIMAL",
+						"precision": 18,
+						"scale": 6
+					},
+					{
+						"name": "UDC_ARCPROJSTATICSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_PACKSPERPALLET",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 5
+					},
+					{
+						"name": "UDC_RESTRICT_SW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STACKINGPERPACK",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBTABSPERBLISTER",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_MTS_MTO",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NEW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STRENGTH",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DOSETOMCG",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_DOSETOIU",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_DMDUNITLEVEL",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_BOXTODOSES",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKSIZEDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FAMILYGRPDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LOCALPRODUCTSW",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SIZETOSTRENGTH",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_LRPDUMMY",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_LRPPRODLEVEL",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LRPSCOPE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GPH",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPHDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKAGINGSTYLE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVEINGR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SUPPLIERNAME",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODCONFIG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODMACROCONFIG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MACROCONFIGDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DMDUNITEXCEPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PROJECTREF",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SECPACKPERBOX",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PACKERMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GAUSSGLOBALCODE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BFDP",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPS",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SUPMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GRPDVLP",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TABLET_SHAPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TXF_CONSTRAINED_DEMAND",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SBU_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SBU_DESC_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GBU_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_LINE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SCM_CATEGORY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DOSAGE_UOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_API_DOSAGE",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PLNBUSLINE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PLNBUSFIELD",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PLNBUSUNIT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_FIELD",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_UNIT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SCCATEGORY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DEVICETYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSDIV",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ISDUMMY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FCSTTXFSTOP",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_UOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LOCAL_BRAND",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_UNITPERPALLET",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_WEIGHT",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_LIST_FILE_RAW')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"FILE_NAME": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FILE_NAME",
+							"type": "Expression"
+						},
+						"fileSystem": "raw"
+					}
+				},
+				"schema": {
+					"type": "object",
+					"properties": {
+						"constructorId": {
+							"type": "integer"
+						},
+						"constructorRef": {
+							"type": "string"
+						},
+						"name": {
+							"type": "string"
+						},
+						"nationality": {
+							"type": "string"
+						},
+						"url": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_LIST_FILE_SILVER')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileSystem": "silver"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_M_SELLING_INVENTORY_STAG_BLOB')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "M_SELLING_INVENTORY_STAG.csv",
+						"fileSystem": "raw"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_SYSTEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_CMG_ID",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_PLANT_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_STORAGE_LOCATION",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_CODE",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_BATCH_NO",
+						"type": "String"
+					},
+					{
+						"name": "SOURCE_ITEM_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS_KEY",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STOCK_TYPE",
+						"type": "String"
+					},
+					{
+						"name": "QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "UNIT_OF_MEASURE",
+						"type": "String"
+					},
+					{
+						"name": "LOADED_FLAG",
+						"type": "String"
+					},
+					{
+						"name": "AI_UOM_QUANTITY",
+						"type": "String"
+					},
+					{
+						"name": "ACTIVE_INGREDIENT_UOM",
+						"type": "String"
+					},
+					{
+						"name": "QC_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "DEFAULT_BATCH_POTENCY",
+						"type": "String"
+					},
+					{
+						"name": "VENDOR_CODE",
+						"type": "String"
+					},
+					{
+						"name": "BATCH_STATUS",
+						"type": "String"
+					},
+					{
+						"name": "ERP_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXTERNAL_SYSTEM_CREATION_DATE",
+						"type": "String"
+					},
+					{
+						"name": "AVAILABLE_DATE",
+						"type": "String"
+					},
+					{
+						"name": "MIC_PROCESS_DATE",
+						"type": "String"
+					},
+					{
+						"name": "EXPIRY_DATE",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_M_SELLING_INVENTORY_STAG_SNOW')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "ID",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "SOURCE_SYSTEM_CODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_CMG_ID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_PLANT_CODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_STORAGE_LOCATION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_ITEM_CODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_BATCH_NO",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SOURCE_ITEM_TYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "BATCH_STATUS_KEY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "BATCH_STOCK_TYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "QUANTITY",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UNIT_OF_MEASURE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LOADED_FLAG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "AI_UOM_QUANTITY",
+						"type": "NUMBER",
+						"precision": 22,
+						"scale": 10
+					},
+					{
+						"name": "ACTIVE_INGREDIENT_UOM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "QC_BATCH_POTENCY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "DEFAULT_BATCH_POTENCY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "VENDOR_CODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "BATCH_STATUS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ERP_CREATION_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "EXTERNAL_SYSTEM_CREATION_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "AVAILABLE_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "MIC_PROCESS_DATE",
+						"type": "TIMESTAMP_NTZ"
+					},
+					{
+						"name": "EXPIRY_DATE",
+						"type": "TIMESTAMP_NTZ"
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "M_SELLING_INVENTORY_STAG"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ITEM_TEST_SRC')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AZURE_DATA_LAKE",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "Parquet",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": "item.parquet",
+						"fileSystem": "bronze"
+					},
+					"compressionCodec": "snappy"
+				},
+				"schema": [
+					{
+						"name": "ITEMID",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL4MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL4MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL3MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL3MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL2MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL2MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL1MEMBERID",
+						"type": "UTF8"
+					},
+					{
+						"name": "LEVEL1MEMBERDESCRIPTION",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRSUPPLYTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRORIGITEM",
+						"type": "UTF8"
+					},
+					{
+						"name": "ATTRVERSION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UNITCOST",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "ISNEWITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ITEMCLASS",
+						"type": "UTF8"
+					},
+					{
+						"name": "HANDLINGINSTRUCTIONCODE",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMFAMILYGROUP",
+						"type": "UTF8"
+					},
+					{
+						"name": "VOLUME",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "UNITSPERPALLET",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "ITEMPRIORITYATTRIB",
+						"type": "UTF8"
+					},
+					{
+						"name": "UNITCONV1",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV2",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV3",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "UNITCONV4",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "GROSSWEIGHT",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "BASEUOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "USEDYNDEPFROMITEMLOCDEPLOYMENTPARAM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "USETRANSPORTCOSTFROMDYNDEPSRC",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "DYNDEPDECIMALS",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPOPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPPUSHOPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPQTY",
+						"type": "DOUBLE"
+					},
+					{
+						"name": "OPTIONCLASS",
+						"type": "UTF8"
+					},
+					{
+						"name": "ITEMSOURCINGSTRATEGY",
+						"type": "UTF8"
+					},
+					{
+						"name": "OPTIONS",
+						"type": "UTF8"
+					},
+					{
+						"name": "DISABLENETTINGPLANNING",
+						"type": "UTF8"
+					},
+					{
+						"name": "ISSHORTLIFECYCLEITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ISPARENTITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TA",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVEPRINCIPLE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CONTAINER",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MARKET",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MFGSOURCE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKSIZE",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PHARMAFORM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODUCTTYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ITEMSTATUS",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_EQUNITS",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_BRAND",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TADESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BRANDDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_STRENGTHDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MP_RELEVANT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FAMILY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CORPDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SOPSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TPREGION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DIVISION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MULTIDEST",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_MULTISOURCE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_BRANDPRIO",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_ITEMEXCEPTION",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACK_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PROD_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_API_SITE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPSNAME",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GROUPING",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_NBUNITSPERHNDLG",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERPALLET",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERLAYER",
+						"type": "DECIMAL",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKMODULE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_STORAGECONDITION",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP2",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP3",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GRP4",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CREATEDBY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CREATIONDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDBY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FACTOR",
+						"type": "DECIMAL",
+						"precision": 14,
+						"scale": 4
+					},
+					{
+						"name": "UDC_ACTIVITY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_CRITICITY",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NPISW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SIZETOBRAND",
+						"type": "DECIMAL",
+						"precision": 18,
+						"scale": 6
+					},
+					{
+						"name": "UDC_ARCPROJSTATICSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_PACKSPERPALLET",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 5
+					},
+					{
+						"name": "UDC_RESTRICT_SW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STACKINGPERPACK",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBTABSPERBLISTER",
+						"type": "DECIMAL",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_MTS_MTO",
+						"type": "DECIMAL",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NEW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STRENGTH",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DOSETOMCG",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_DOSETOIU",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_DMDUNITLEVEL",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_BOXTODOSES",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKSIZEDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FAMILYGRPDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LOCALPRODUCTSW",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SIZETOSTRENGTH",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_LRPDUMMY",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_LRPPRODLEVEL",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LRPSCOPE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GPH",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPHDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKAGINGSTYLE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVEINGR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SUPPLIERNAME",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODCONFIG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PRODMACROCONFIG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_MACROCONFIGDESCR",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DMDUNITEXCEPTION",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PROJECTREF",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SECPACKPERBOX",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PACKERMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GAUSSGLOBALCODE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BFDP",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GPS",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SUPMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PACKMFG",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ACTIVE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GRPDVLP",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TABLET_SHAPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_TXF_CONSTRAINED_DEMAND",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SBU_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SBU_DESC_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_GBU_YPLUS1",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_LINE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SCM_CATEGORY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DOSAGE_UOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_API_DOSAGE",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PLNBUSLINE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PLNBUSFIELD",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_PLNBUSUNIT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_FIELD",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSINESS_UNIT",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_SCCATEGORY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_DEVICETYPE",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_BUSDIV",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_ISDUMMY",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_FCSTTXFSTOP",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_UOM",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_LOCAL_BRAND",
+						"type": "UTF8"
+					},
+					{
+						"name": "UDC_UNITPERPALLET",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_WEIGHT",
+						"type": "DECIMAL",
+						"precision": 38,
+						"scale": 10
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AZURE_DATA_LAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ITEM_TEST_TGT')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "ITEMID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ITEMDESCRIPTION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ITEMTYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL4MEMBERID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL4MEMBERDESCRIPTION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL3MEMBERID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL3MEMBERDESCRIPTION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL2MEMBERID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL2MEMBERDESCRIPTION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL1MEMBERID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "LEVEL1MEMBERDESCRIPTION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ATTRSUPPLYTYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ATTRORIGITEM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ATTRVERSION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UNITCOST",
+						"type": "FLOAT"
+					},
+					{
+						"name": "ISNEWITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ITEMCLASS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "HANDLINGINSTRUCTIONCODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ITEMFAMILYGROUP",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "VOLUME",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "UNITSPERPALLET",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "ITEMPRIORITYATTRIB",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UNITCONV1",
+						"type": "FLOAT"
+					},
+					{
+						"name": "UNITCONV2",
+						"type": "FLOAT"
+					},
+					{
+						"name": "UNITCONV3",
+						"type": "FLOAT"
+					},
+					{
+						"name": "UNITCONV4",
+						"type": "FLOAT"
+					},
+					{
+						"name": "GROSSWEIGHT",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 4
+					},
+					{
+						"name": "BASEUOM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "USEDYNDEPFROMITEMLOCDEPLOYMENTPARAM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "USETRANSPORTCOSTFROMDYNDEPSRC",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "DYNDEPDECIMALS",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPOPTION",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPPUSHOPTION",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "DYNDEPQTY",
+						"type": "FLOAT"
+					},
+					{
+						"name": "OPTIONCLASS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ITEMSOURCINGSTRATEGY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "OPTIONS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "DISABLENETTINGPLANNING",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "ISSHORTLIFECYCLEITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "ISPARENTITEM",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TA",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_ACTIVEPRINCIPLE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_CONTAINER",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_MARKET",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_MFGSOURCE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PACKSIZE",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PHARMAFORM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PRODUCTTYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_ITEMSTATUS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_EQUNITS",
+						"type": "NUMBER",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_BRAND",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_TADESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BRANDDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_STRENGTHDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_MP_RELEVANT",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_FAMILY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_CORPDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SOPSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_TPREGION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_DIVISION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_MULTIDEST",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_MULTISOURCE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_BRANDPRIO",
+						"type": "NUMBER",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_ITEMEXCEPTION",
+						"type": "NUMBER",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACK_SITE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PROD_SITE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_API_SITE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GPSNAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GROUPING",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_NBUNITSPERHNDLG",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERPALLET",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBHNDLGPERLAYER",
+						"type": "NUMBER",
+						"precision": 12,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKMODULE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_STORAGECONDITION",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GRP1",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GRP2",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GRP3",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GRP4",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_CREATEDBY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_CREATIONDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDATE",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_LASTUPDATEDBY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_FACTOR",
+						"type": "NUMBER",
+						"precision": 14,
+						"scale": 4
+					},
+					{
+						"name": "UDC_ACTIVITY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_CRITICITY",
+						"type": "NUMBER",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NPISW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SIZETOBRAND",
+						"type": "NUMBER",
+						"precision": 18,
+						"scale": 6
+					},
+					{
+						"name": "UDC_ARCPROJSTATICSW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_PACKSPERPALLET",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 5
+					},
+					{
+						"name": "UDC_RESTRICT_SW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STACKINGPERPACK",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_NBTABSPERBLISTER",
+						"type": "NUMBER",
+						"precision": 22,
+						"scale": 0
+					},
+					{
+						"name": "UDC_MTS_MTO",
+						"type": "NUMBER",
+						"precision": 30,
+						"scale": 2
+					},
+					{
+						"name": "UDC_NEW",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_STRENGTH",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_DOSETOMCG",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_DOSETOIU",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_DMDUNITLEVEL",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_BOXTODOSES",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PACKSIZEDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_FAMILYGRPDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_LOCALPRODUCTSW",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SIZETOSTRENGTH",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_LRPDUMMY",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_LRPPRODLEVEL",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_LRPSCOPE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GPH",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GPHDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PACKAGINGSTYLE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_ACTIVEINGR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SUPPLIERNAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PRODCONFIG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PRODMACROCONFIG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_MACROCONFIGDESCR",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_DMDUNITEXCEPTION",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 0
+					},
+					{
+						"name": "UDC_PROJECTREF",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SECPACKPERBOX",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PACKERMFG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GAUSSGLOBALCODE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BFDP",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GPS",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SUPMFG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PACKMFG",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_ACTIVE",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_GRPDVLP",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_TABLET_SHAPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_TXF_CONSTRAINED_DEMAND",
+						"type": "BOOLEAN"
+					},
+					{
+						"name": "UDC_SBU_YPLUS1",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SBU_DESC_YPLUS1",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_GBU_YPLUS1",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BUSINESS_LINE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SCM_CATEGORY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_DOSAGE_UOM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_API_DOSAGE",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_PLNBUSLINE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PLNBUSFIELD",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_PLNBUSUNIT",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BUSINESS_FIELD",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BUSINESS_UNIT",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_SCCATEGORY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_DEVICETYPE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_BUSDIV",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_ISDUMMY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_FCSTTXFSTOP",
+						"type": "DATE"
+					},
+					{
+						"name": "UDC_UOM",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_LOCAL_BRAND",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "UDC_UNITPERPALLET",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					},
+					{
+						"name": "UDC_WEIGHT",
+						"type": "NUMBER",
+						"precision": 38,
+						"scale": 10
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "ITEM_TEST"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PARAM_CONFIG_TABLE')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "TABLE_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "SCHEMA_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "FILE_NAME",
+						"type": "VARCHAR"
+					}
+				],
+				"typeProperties": {
+					"schema": "MICSTAG",
+					"table": "PARAM_CONFIG_TABLE"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SRC_CUSTOMER')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "CUSTOMER_ID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_EMAIL",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_CITY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_STATE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_DOB",
+						"type": "DATE"
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "CUSTOMER"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TGT_CUSTOMER')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_SNOWFLAKE_V2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeV2Table",
+				"schema": [
+					{
+						"name": "CUSTOMER_ID",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_NAME",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_EMAIL",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_CITY",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_STATE",
+						"type": "VARCHAR"
+					},
+					{
+						"name": "CUSTOMER_DOB",
+						"type": "DATE"
+					}
+				],
+				"typeProperties": {
+					"schema": "TRAINING",
+					"table": "CUSTOMER_TGT"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_SNOWFLAKE_V2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_AZURE_DATA_LAKE')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobFS",
+				"typeProperties": {
+					"url": "[parameters('LS_AZURE_DATA_LAKE_properties_typeProperties_url')]",
+					"accountKey": {
+						"type": "SecureString",
+						"value": "[parameters('LS_AZURE_DATA_LAKE_accountKey')]"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_SNOWFLAKE_V2')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "SnowflakeV2",
+				"typeProperties": {
+					"authenticationType": "Basic",
+					"accountIdentifier": "TBKOFHT-MTB84290",
+					"user": "ANJSNOWFLAKE",
+					"database": "[parameters('LS_SNOWFLAKE_V2_properties_typeProperties_database')]",
+					"warehouse": "FIRST_DWH",
+					"role": "[parameters('LS_SNOWFLAKE_V2_properties_typeProperties_role')]",
+					"host": "[parameters('LS_SNOWFLAKE_V2_properties_typeProperties_host')]",
+					"password": {
+						"type": "SecureString",
+						"value": "[parameters('LS_SNOWFLAKE_V2_password')]"
+					}
+				},
+				"connectVia": {
+					"referenceName": "TESTIR",
+					"type": "IntegrationRuntimeReference"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/integrationRuntimes/TESTIR')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TRIGGER_TEST')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Stopped",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "PL_CP_AZURE_SNOWFLAKE",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "ScheduleTrigger",
+				"typeProperties": {
+					"recurrence": {
+						"frequency": "Minute",
+						"interval": 5,
+						"startTime": "2025-12-23T04:47:00",
+						"timeZone": "India Standard Time"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_CP_AZURE_SNOWFLAKE')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/TESTIR')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "Managed",
+				"typeProperties": {
+					"computeProperties": {
+						"location": "AutoResolve",
+						"dataFlowProperties": {
+							"computeType": "General",
+							"coreCount": 8,
+							"timeToLive": 10,
+							"cleanup": false,
+							"customProperties": []
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/integrationRuntime1')]",
+			"type": "Microsoft.DataFactory/factories/integrationRuntimes",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "Managed",
+				"typeProperties": {
+					"computeProperties": {
+						"location": "AutoResolve",
+						"dataFlowProperties": {
+							"computeType": "General",
+							"coreCount": 8,
+							"timeToLive": 10,
+							"cleanup": false,
+							"customProperties": []
+						}
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DF_CP_ALL_LKP_ADLS_SNOW')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DS_ALL_LKP_ADLS",
+								"type": "DatasetReference"
+							},
+							"name": "SrcAllLkpFiles"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "DS_ALL_LKP_SNOW",
+								"type": "DatasetReference"
+							},
+							"name": "TgtAllLkpTables"
+						}
+					],
+					"transformations": [
+						{
+							"name": "PassThrough"
+						}
+					],
+					"scriptLines": [
+						"source(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> SrcAllLkpFiles",
+						"SrcAllLkpFiles select(skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> PassThrough",
+						"PassThrough sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     truncate:true,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true) ~> TgtAllLkpTables"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_ALL_LKP_ADLS')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ALL_LKP_SNOW')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DF_CP_AZURE_SNOW_ITEM')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "ITEM_TEST_SRC",
+								"type": "DatasetReference"
+							},
+							"name": "SRS"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "ITEM_TEST_TGT",
+								"type": "DatasetReference"
+							},
+							"name": "TGT",
+							"description": "Target Item Table in Snowflake"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SELECTALL",
+							"description": "Select All the columns"
+						},
+						{
+							"name": "checkitemtype",
+							"description": "If item_type is null then assign '-1'"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          ITEMID as string,",
+						"          ITEMDESCRIPTION as string,",
+						"          ITEMTYPE as string,",
+						"          LEVEL4MEMBERID as string,",
+						"          LEVEL4MEMBERDESCRIPTION as string,",
+						"          LEVEL3MEMBERID as string,",
+						"          LEVEL3MEMBERDESCRIPTION as string,",
+						"          LEVEL2MEMBERID as string,",
+						"          LEVEL2MEMBERDESCRIPTION as string,",
+						"          LEVEL1MEMBERID as string,",
+						"          LEVEL1MEMBERDESCRIPTION as string,",
+						"          ATTRSUPPLYTYPE as string,",
+						"          ATTRORIGITEM as string,",
+						"          ATTRVERSION as string,",
+						"          UNITCOST as double,",
+						"          ISNEWITEM as boolean,",
+						"          ITEMCLASS as string,",
+						"          HANDLINGINSTRUCTIONCODE as string,",
+						"          ITEMFAMILYGROUP as string,",
+						"          VOLUME as decimal(12,4),",
+						"          UNITSPERPALLET as decimal(12,4),",
+						"          ITEMPRIORITYATTRIB as string,",
+						"          UNITCONV1 as double,",
+						"          UNITCONV2 as double,",
+						"          UNITCONV3 as double,",
+						"          UNITCONV4 as double,",
+						"          GROSSWEIGHT as decimal(12,4),",
+						"          BASEUOM as string,",
+						"          USEDYNDEPFROMITEMLOCDEPLOYMENTPARAM as boolean,",
+						"          USETRANSPORTCOSTFROMDYNDEPSRC as boolean,",
+						"          DYNDEPDECIMALS as decimal(38,0),",
+						"          DYNDEPOPTION as decimal(38,0),",
+						"          DYNDEPPUSHOPTION as decimal(38,0),",
+						"          DYNDEPQTY as double,",
+						"          OPTIONCLASS as string,",
+						"          ITEMSOURCINGSTRATEGY as string,",
+						"          OPTIONS as string,",
+						"          DISABLENETTINGPLANNING as string,",
+						"          ISSHORTLIFECYCLEITEM as boolean,",
+						"          ISPARENTITEM as boolean,",
+						"          UDC_TA as string,",
+						"          UDC_ACTIVEPRINCIPLE as string,",
+						"          UDC_CONTAINER as string,",
+						"          UDC_MARKET as string,",
+						"          UDC_MFGSOURCE as string,",
+						"          UDC_PACKSIZE as decimal(12,0),",
+						"          UDC_PHARMAFORM as string,",
+						"          UDC_PRODUCTTYPE as string,",
+						"          UDC_ITEMSTATUS as string,",
+						"          UDC_EQUNITS as decimal(30,2),",
+						"          UDC_BRAND as string,",
+						"          UDC_TADESCR as string,",
+						"          UDC_BRANDDESCR as string,",
+						"          UDC_STRENGTHDESCR as string,",
+						"          UDC_MP_RELEVANT as string,",
+						"          UDC_FAMILY as string,",
+						"          UDC_CORPDESCR as string,",
+						"          UDC_SOPSW as boolean,",
+						"          UDC_TPREGION as string,",
+						"          UDC_DIVISION as string,",
+						"          UDC_MULTIDEST as boolean,",
+						"          UDC_MULTISOURCE as boolean,",
+						"          UDC_BRANDPRIO as decimal(22,0),",
+						"          UDC_ITEMEXCEPTION as decimal(22,0),",
+						"          UDC_PACK_SITE as string,",
+						"          UDC_PROD_SITE as string,",
+						"          UDC_API_SITE as string,",
+						"          UDC_GPSNAME as string,",
+						"          UDC_GROUPING as string,",
+						"          UDC_NBUNITSPERHNDLG as decimal(12,0),",
+						"          UDC_NBHNDLGPERPALLET as decimal(12,0),",
+						"          UDC_NBHNDLGPERLAYER as decimal(12,0),",
+						"          UDC_PACKMODULE as string,",
+						"          UDC_STORAGECONDITION as string,",
+						"          UDC_GRP1 as string,",
+						"          UDC_GRP2 as string,",
+						"          UDC_GRP3 as string,",
+						"          UDC_GRP4 as string,",
+						"          UDC_CREATEDBY as string,",
+						"          UDC_CREATIONDATE as date,",
+						"          UDC_LASTUPDATEDATE as date,",
+						"          UDC_LASTUPDATEDBY as string,",
+						"          UDC_FACTOR as decimal(14,4),",
+						"          UDC_ACTIVITY as string,",
+						"          UDC_CRITICITY as decimal(30,2),",
+						"          UDC_NPISW as boolean,",
+						"          UDC_SIZETOBRAND as decimal(18,6),",
+						"          UDC_ARCPROJSTATICSW as boolean,",
+						"          UDC_PACKSPERPALLET as decimal(38,5),",
+						"          UDC_RESTRICT_SW as boolean,",
+						"          UDC_STACKINGPERPACK as decimal(38,0),",
+						"          UDC_NBTABSPERBLISTER as decimal(22,0),",
+						"          UDC_MTS_MTO as decimal(30,2),",
+						"          UDC_NEW as boolean,",
+						"          UDC_STRENGTH as string,",
+						"          UDC_DOSETOMCG as decimal(38,10),",
+						"          UDC_DOSETOIU as decimal(38,0),",
+						"          UDC_DMDUNITLEVEL as decimal(38,0),",
+						"          UDC_BOXTODOSES as decimal(38,0),",
+						"          UDC_PACKSIZEDESCR as string,",
+						"          UDC_FAMILYGRPDESCR as string,",
+						"          UDC_LOCALPRODUCTSW as string,",
+						"          UDC_SIZETOSTRENGTH as decimal(38,10),",
+						"          UDC_LRPDUMMY as boolean,",
+						"          UDC_LRPPRODLEVEL as string,",
+						"          UDC_LRPSCOPE as boolean,",
+						"          UDC_GPH as string,",
+						"          UDC_GPHDESCR as string,",
+						"          UDC_PACKAGINGSTYLE as string,",
+						"          UDC_ACTIVEINGR as string,",
+						"          UDC_SUPPLIERNAME as string,",
+						"          UDC_PRODCONFIG as string,",
+						"          UDC_PRODMACROCONFIG as string,",
+						"          UDC_MACROCONFIGDESCR as string,",
+						"          UDC_DMDUNITEXCEPTION as decimal(38,0),",
+						"          UDC_PROJECTREF as string,",
+						"          UDC_SECPACKPERBOX as decimal(38,10),",
+						"          UDC_PACKERMFG as string,",
+						"          UDC_GAUSSGLOBALCODE as string,",
+						"          UDC_BFDP as string,",
+						"          UDC_GPS as string,",
+						"          UDC_SUPMFG as string,",
+						"          UDC_PACKMFG as string,",
+						"          UDC_ACTIVE as boolean,",
+						"          UDC_GRPDVLP as string,",
+						"          UDC_TABLET_SHAPE as string,",
+						"          UDC_TXF_CONSTRAINED_DEMAND as boolean,",
+						"          UDC_SBU_YPLUS1 as string,",
+						"          UDC_SBU_DESC_YPLUS1 as string,",
+						"          UDC_GBU_YPLUS1 as string,",
+						"          UDC_BUSINESS_LINE as string,",
+						"          UDC_SCM_CATEGORY as string,",
+						"          UDC_DOSAGE_UOM as string,",
+						"          UDC_API_DOSAGE as decimal(38,10),",
+						"          UDC_PLNBUSLINE as string,",
+						"          UDC_PLNBUSFIELD as string,",
+						"          UDC_PLNBUSUNIT as string,",
+						"          UDC_BUSINESS_FIELD as string,",
+						"          UDC_BUSINESS_UNIT as string,",
+						"          UDC_SCCATEGORY as string,",
+						"          UDC_DEVICETYPE as string,",
+						"          UDC_BUSDIV as string,",
+						"          UDC_ISDUMMY as string,",
+						"          UDC_FCSTTXFSTOP as date,",
+						"          UDC_UOM as string,",
+						"          UDC_LOCAL_BRAND as string,",
+						"          UDC_UNITPERPALLET as decimal(38,10),",
+						"          UDC_WEIGHT as decimal(38,10)",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false,",
+						"     format: 'parquet') ~> SRS",
+						"SRS select(mapColumn(",
+						"          each(match(/* All input columns */true()),",
+						"               /* Input name */$$ = $$)",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> SELECTALL",
+						"SELECTALL derive(ITEMTYPE = iif(isNull(ITEMTYPE),'-1',ITEMTYPE)) ~> checkitemtype",
+						"checkitemtype sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          ITEMID as string,",
+						"          ITEMDESCRIPTION as string,",
+						"          ITEMTYPE as string,",
+						"          LEVEL4MEMBERID as string,",
+						"          LEVEL4MEMBERDESCRIPTION as string,",
+						"          LEVEL3MEMBERID as string,",
+						"          LEVEL3MEMBERDESCRIPTION as string,",
+						"          LEVEL2MEMBERID as string,",
+						"          LEVEL2MEMBERDESCRIPTION as string,",
+						"          LEVEL1MEMBERID as string,",
+						"          LEVEL1MEMBERDESCRIPTION as string,",
+						"          ATTRSUPPLYTYPE as string,",
+						"          ATTRORIGITEM as string,",
+						"          ATTRVERSION as string,",
+						"          UNITCOST as double,",
+						"          ISNEWITEM as boolean,",
+						"          ITEMCLASS as string,",
+						"          HANDLINGINSTRUCTIONCODE as string,",
+						"          ITEMFAMILYGROUP as string,",
+						"          VOLUME as decimal(12,4),",
+						"          UNITSPERPALLET as decimal(12,4),",
+						"          ITEMPRIORITYATTRIB as string,",
+						"          UNITCONV1 as double,",
+						"          UNITCONV2 as double,",
+						"          UNITCONV3 as double,",
+						"          UNITCONV4 as double,",
+						"          GROSSWEIGHT as decimal(12,4),",
+						"          BASEUOM as string,",
+						"          USEDYNDEPFROMITEMLOCDEPLOYMENTPARAM as boolean,",
+						"          USETRANSPORTCOSTFROMDYNDEPSRC as boolean,",
+						"          DYNDEPDECIMALS as decimal(38,0),",
+						"          DYNDEPOPTION as decimal(38,0),",
+						"          DYNDEPPUSHOPTION as decimal(38,0),",
+						"          DYNDEPQTY as double,",
+						"          OPTIONCLASS as string,",
+						"          ITEMSOURCINGSTRATEGY as string,",
+						"          OPTIONS as string,",
+						"          DISABLENETTINGPLANNING as string,",
+						"          ISSHORTLIFECYCLEITEM as boolean,",
+						"          ISPARENTITEM as boolean,",
+						"          UDC_TA as string,",
+						"          UDC_ACTIVEPRINCIPLE as string,",
+						"          UDC_CONTAINER as string,",
+						"          UDC_MARKET as string,",
+						"          UDC_MFGSOURCE as string,",
+						"          UDC_PACKSIZE as decimal(12,0),",
+						"          UDC_PHARMAFORM as string,",
+						"          UDC_PRODUCTTYPE as string,",
+						"          UDC_ITEMSTATUS as string,",
+						"          UDC_EQUNITS as decimal(30,2),",
+						"          UDC_BRAND as string,",
+						"          UDC_TADESCR as string,",
+						"          UDC_BRANDDESCR as string,",
+						"          UDC_STRENGTHDESCR as string,",
+						"          UDC_MP_RELEVANT as string,",
+						"          UDC_FAMILY as string,",
+						"          UDC_CORPDESCR as string,",
+						"          UDC_SOPSW as boolean,",
+						"          UDC_TPREGION as string,",
+						"          UDC_DIVISION as string,",
+						"          UDC_MULTIDEST as boolean,",
+						"          UDC_MULTISOURCE as boolean,",
+						"          UDC_BRANDPRIO as decimal(22,0),",
+						"          UDC_ITEMEXCEPTION as decimal(22,0),",
+						"          UDC_PACK_SITE as string,",
+						"          UDC_PROD_SITE as string,",
+						"          UDC_API_SITE as string,",
+						"          UDC_GPSNAME as string,",
+						"          UDC_GROUPING as string,",
+						"          UDC_NBUNITSPERHNDLG as decimal(12,0),",
+						"          UDC_NBHNDLGPERPALLET as decimal(12,0),",
+						"          UDC_NBHNDLGPERLAYER as decimal(12,0),",
+						"          UDC_PACKMODULE as string,",
+						"          UDC_STORAGECONDITION as string,",
+						"          UDC_GRP1 as string,",
+						"          UDC_GRP2 as string,",
+						"          UDC_GRP3 as string,",
+						"          UDC_GRP4 as string,",
+						"          UDC_CREATEDBY as string,",
+						"          UDC_CREATIONDATE as date,",
+						"          UDC_LASTUPDATEDATE as date,",
+						"          UDC_LASTUPDATEDBY as string,",
+						"          UDC_FACTOR as decimal(14,4),",
+						"          UDC_ACTIVITY as string,",
+						"          UDC_CRITICITY as decimal(30,2),",
+						"          UDC_NPISW as boolean,",
+						"          UDC_SIZETOBRAND as decimal(18,6),",
+						"          UDC_ARCPROJSTATICSW as boolean,",
+						"          UDC_PACKSPERPALLET as decimal(38,5),",
+						"          UDC_RESTRICT_SW as boolean,",
+						"          UDC_STACKINGPERPACK as decimal(38,0),",
+						"          UDC_NBTABSPERBLISTER as decimal(22,0),",
+						"          UDC_MTS_MTO as decimal(30,2),",
+						"          UDC_NEW as boolean,",
+						"          UDC_STRENGTH as string,",
+						"          UDC_DOSETOMCG as decimal(38,10),",
+						"          UDC_DOSETOIU as decimal(38,0),",
+						"          UDC_DMDUNITLEVEL as decimal(38,0),",
+						"          UDC_BOXTODOSES as decimal(38,0),",
+						"          UDC_PACKSIZEDESCR as string,",
+						"          UDC_FAMILYGRPDESCR as string,",
+						"          UDC_LOCALPRODUCTSW as string,",
+						"          UDC_SIZETOSTRENGTH as decimal(38,10),",
+						"          UDC_LRPDUMMY as boolean,",
+						"          UDC_LRPPRODLEVEL as string,",
+						"          UDC_LRPSCOPE as boolean,",
+						"          UDC_GPH as string,",
+						"          UDC_GPHDESCR as string,",
+						"          UDC_PACKAGINGSTYLE as string,",
+						"          UDC_ACTIVEINGR as string,",
+						"          UDC_SUPPLIERNAME as string,",
+						"          UDC_PRODCONFIG as string,",
+						"          UDC_PRODMACROCONFIG as string,",
+						"          UDC_MACROCONFIGDESCR as string,",
+						"          UDC_DMDUNITEXCEPTION as decimal(38,0),",
+						"          UDC_PROJECTREF as string,",
+						"          UDC_SECPACKPERBOX as decimal(38,10),",
+						"          UDC_PACKERMFG as string,",
+						"          UDC_GAUSSGLOBALCODE as string,",
+						"          UDC_BFDP as string,",
+						"          UDC_GPS as string,",
+						"          UDC_SUPMFG as string,",
+						"          UDC_PACKMFG as string,",
+						"          UDC_ACTIVE as boolean,",
+						"          UDC_GRPDVLP as string,",
+						"          UDC_TABLET_SHAPE as string,",
+						"          UDC_TXF_CONSTRAINED_DEMAND as boolean,",
+						"          UDC_SBU_YPLUS1 as string,",
+						"          UDC_SBU_DESC_YPLUS1 as string,",
+						"          UDC_GBU_YPLUS1 as string,",
+						"          UDC_BUSINESS_LINE as string,",
+						"          UDC_SCM_CATEGORY as string,",
+						"          UDC_DOSAGE_UOM as string,",
+						"          UDC_API_DOSAGE as decimal(38,10),",
+						"          UDC_PLNBUSLINE as string,",
+						"          UDC_PLNBUSFIELD as string,",
+						"          UDC_PLNBUSUNIT as string,",
+						"          UDC_BUSINESS_FIELD as string,",
+						"          UDC_BUSINESS_UNIT as string,",
+						"          UDC_SCCATEGORY as string,",
+						"          UDC_DEVICETYPE as string,",
+						"          UDC_BUSDIV as string,",
+						"          UDC_ISDUMMY as string,",
+						"          UDC_FCSTTXFSTOP as date,",
+						"          UDC_UOM as string,",
+						"          UDC_LOCAL_BRAND as string,",
+						"          UDC_UNITPERPALLET as decimal(38,10),",
+						"          UDC_WEIGHT as decimal(38,10)",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     truncate:true,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true) ~> TGT"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ITEM_TEST_SRC')]",
+				"[concat(variables('factoryId'), '/datasets/ITEM_TEST_TGT')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DF_CP_M_SELLING_INVENTORY_STAG')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "DS_M_SELLING_INVENTORY_STAG_BLOB",
+								"type": "DatasetReference"
+							},
+							"name": "SOURCE",
+							"description": "Add source dataset M_SELLING_INVENTORY_STAG"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "DS_M_SELLING_INVENTORY_STAG_SNOW",
+								"type": "DatasetReference"
+							},
+							"name": "TAREGT",
+							"description": "TARGET TABLE IS M_SELLING_INVENTORY_STAG"
+						},
+						{
+							"dataset": {
+								"referenceName": "DS_ETL_LAST_RUN",
+								"type": "DatasetReference"
+							},
+							"name": "TargetParamFile"
+						}
+					],
+					"transformations": [
+						{
+							"name": "SORT",
+							"description": "Sort by ID"
+						},
+						{
+							"name": "derivedColumn",
+							"description": "Setting some value for quantity column"
+						},
+						{
+							"name": "filterDataIncreamentally"
+						},
+						{
+							"name": "maxErpCreationDate"
+						},
+						{
+							"name": "PrepareParamRow",
+							"description": "Prepare the row for paramfile"
+						},
+						{
+							"name": "AddColumnForGroupByPort"
+						}
+					],
+					"scriptLines": [
+						"parameters{",
+						"     DF_LAST_LOADED_DATE as string",
+						"}",
+						"source(output(",
+						"          ID as integer,",
+						"          SOURCE_SYSTEM_CODE as string,",
+						"          SOURCE_CMG_ID as string,",
+						"          SOURCE_PLANT_CODE as string,",
+						"          SOURCE_STORAGE_LOCATION as string,",
+						"          SOURCE_ITEM_CODE as string,",
+						"          SOURCE_BATCH_NO as string,",
+						"          SOURCE_ITEM_TYPE as string,",
+						"          BATCH_STATUS_KEY as string,",
+						"          BATCH_STOCK_TYPE as string,",
+						"          QUANTITY as integer,",
+						"          UNIT_OF_MEASURE as string,",
+						"          LOADED_FLAG as string,",
+						"          AI_UOM_QUANTITY as integer,",
+						"          ACTIVE_INGREDIENT_UOM as string,",
+						"          QC_BATCH_POTENCY as string,",
+						"          DEFAULT_BATCH_POTENCY as string,",
+						"          VENDOR_CODE as string,",
+						"          BATCH_STATUS as string,",
+						"          ERP_CREATION_DATE as timestamp,",
+						"          EXTERNAL_SYSTEM_CREATION_DATE as timestamp,",
+						"          AVAILABLE_DATE as timestamp,",
+						"          MIC_PROCESS_DATE as timestamp,",
+						"          EXPIRY_DATE as timestamp",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     ignoreNoFilesFound: false) ~> SOURCE",
+						"filterDataIncreamentally sort(asc(ID, true),",
+						"     caseInsensitive: true) ~> SORT",
+						"SORT derive(QUANTITY = iif(isNull(QUANTITY), -1, QUANTITY)) ~> derivedColumn",
+						"SOURCE filter(ERP_CREATION_DATE > toTimestamp($DF_LAST_LOADED_DATE, 'dd-MM-yyyy HH:mm:ss')) ~> filterDataIncreamentally",
+						"AddColumnForGroupByPort aggregate(groupBy(TABLE_NAME),",
+						"     MAX_ERP_CREATION_DATE = max(ERP_CREATION_DATE)) ~> maxErpCreationDate",
+						"maxErpCreationDate derive(LAST_LOADED_DATE = iif(not(isNull(toString(MAX_ERP_CREATION_DATE, 'dd-MM-yyyy HH:mm:ss'))),toString(MAX_ERP_CREATION_DATE, 'dd-MM-yyyy HH:mm:ss'),$DF_LAST_LOADED_DATE)) ~> PrepareParamRow",
+						"filterDataIncreamentally derive(TABLE_NAME = 'M_SELLING_INVENTORY_STAG') ~> AddColumnForGroupByPort",
+						"derivedColumn sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          ID as decimal(38,0),",
+						"          SOURCE_SYSTEM_CODE as string,",
+						"          SOURCE_CMG_ID as string,",
+						"          SOURCE_PLANT_CODE as string,",
+						"          SOURCE_STORAGE_LOCATION as string,",
+						"          SOURCE_ITEM_CODE as string,",
+						"          SOURCE_BATCH_NO as string,",
+						"          SOURCE_ITEM_TYPE as string,",
+						"          BATCH_STATUS_KEY as string,",
+						"          BATCH_STOCK_TYPE as string,",
+						"          QUANTITY as decimal(38,0),",
+						"          UNIT_OF_MEASURE as string,",
+						"          LOADED_FLAG as string,",
+						"          AI_UOM_QUANTITY as decimal(22,10),",
+						"          ACTIVE_INGREDIENT_UOM as string,",
+						"          QC_BATCH_POTENCY as string,",
+						"          DEFAULT_BATCH_POTENCY as string,",
+						"          VENDOR_CODE as string,",
+						"          BATCH_STATUS as string,",
+						"          ERP_CREATION_DATE as timestamp,",
+						"          EXTERNAL_SYSTEM_CREATION_DATE as timestamp,",
+						"          AVAILABLE_DATE as timestamp,",
+						"          MIC_PROCESS_DATE as timestamp,",
+						"          EXPIRY_DATE as timestamp",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     saveOrder: 1,",
+						"     stageInsert: true,",
+						"     mapColumn(",
+						"          ID,",
+						"          SOURCE_SYSTEM_CODE,",
+						"          SOURCE_CMG_ID,",
+						"          SOURCE_PLANT_CODE,",
+						"          SOURCE_STORAGE_LOCATION,",
+						"          SOURCE_ITEM_CODE,",
+						"          SOURCE_BATCH_NO,",
+						"          SOURCE_ITEM_TYPE,",
+						"          BATCH_STATUS_KEY,",
+						"          BATCH_STOCK_TYPE,",
+						"          QUANTITY,",
+						"          UNIT_OF_MEASURE,",
+						"          LOADED_FLAG,",
+						"          AI_UOM_QUANTITY,",
+						"          ACTIVE_INGREDIENT_UOM,",
+						"          QC_BATCH_POTENCY,",
+						"          DEFAULT_BATCH_POTENCY,",
+						"          VENDOR_CODE,",
+						"          BATCH_STATUS,",
+						"          ERP_CREATION_DATE,",
+						"          EXTERNAL_SYSTEM_CREATION_DATE,",
+						"          AVAILABLE_DATE,",
+						"          MIC_PROCESS_DATE,",
+						"          EXPIRY_DATE",
+						"     )) ~> TAREGT",
+						"PrepareParamRow sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          LAST_LOADED_DATE as string",
+						"     ),",
+						"     partitionFileNames:['ETL_LAST_RUN.json'],",
+						"     umask: 0777,",
+						"     preCommands: [],",
+						"     postCommands: [],",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     saveOrder: 2,",
+						"     mapColumn(",
+						"          LAST_LOADED_DATE",
+						"     ),",
+						"     partitionBy('hash', 1)) ~> TargetParamFile"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_M_SELLING_INVENTORY_STAG_BLOB')]",
+				"[concat(variables('factoryId'), '/datasets/DS_M_SELLING_INVENTORY_STAG_SNOW')]",
+				"[concat(variables('factoryId'), '/datasets/DS_ETL_LAST_RUN')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DF_CP_SNOW_TO_SNOW_TEST')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "SRC_CUSTOMER",
+								"type": "DatasetReference"
+							},
+							"name": "source1"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "TGT_CUSTOMER",
+								"type": "DatasetReference"
+							},
+							"name": "sink1"
+						}
+					],
+					"transformations": [],
+					"scriptLines": [
+						"source(output(",
+						"          CUSTOMER_ID as string,",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_EMAIL as string,",
+						"          CUSTOMER_CITY as string,",
+						"          CUSTOMER_STATE as string,",
+						"          CUSTOMER_DOB as date",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'table') ~> source1",
+						"source1 sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          CUSTOMER_ID as string,",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_EMAIL as string,",
+						"          CUSTOMER_CITY as string,",
+						"          CUSTOMER_STATE as string,",
+						"          CUSTOMER_DOB as date",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     truncate:true,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true) ~> sink1"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/SRC_CUSTOMER')]",
+				"[concat(variables('factoryId'), '/datasets/TGT_CUSTOMER')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DF_CUSTOMER_SCDTYPE2_LOAD')]",
+			"type": "Microsoft.DataFactory/factories/dataflows",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"type": "MappingDataFlow",
+				"typeProperties": {
+					"sources": [
+						{
+							"dataset": {
+								"referenceName": "CUSTOMER_STG",
+								"type": "DatasetReference"
+							},
+							"name": "SOURCE",
+							"description": "CUSTOMER_STG"
+						},
+						{
+							"dataset": {
+								"referenceName": "CUSTOMER_TARGET",
+								"type": "DatasetReference"
+							},
+							"name": "CustomerTraget",
+							"description": "CUSTOMER_TARGET"
+						}
+					],
+					"sinks": [
+						{
+							"dataset": {
+								"referenceName": "CUSTOMER_TARGET",
+								"type": "DatasetReference"
+							},
+							"name": "InsertNewRecordTGT"
+						},
+						{
+							"dataset": {
+								"referenceName": "CUSTOMER_TARGET",
+								"type": "DatasetReference"
+							},
+							"name": "UpdateOldRecordTGT",
+							"description": "Update CUST_END_DATE and IS_ACTIVE in CUSTOMER_TARGET"
+						},
+						{
+							"dataset": {
+								"referenceName": "CUSTOMER_TARGET",
+								"type": "DatasetReference"
+							},
+							"name": "InsertChangedRecordTGT"
+						}
+					],
+					"transformations": [
+						{
+							"name": "lookup",
+							"description": "Lookup On CUSTOMER_TARGET"
+						},
+						{
+							"name": "CustTable",
+							"description": "CUSTOMER_ID, \nCUSTOMER_NAME, \nCUSTOMER_CITY, \nADDRESS\n\n"
+						},
+						{
+							"name": "InsertOrUpdateFlag"
+						},
+						{
+							"name": "SplitInsertAndUpdate",
+							"description": "Split for insert and update"
+						},
+						{
+							"name": "derivedColumn1"
+						},
+						{
+							"name": "derivedColumn2",
+							"description": "Update CUST_END_DATE and IS_ACTIVE "
+						},
+						{
+							"name": "derivedColumn3",
+							"description": "Assign the value for inserting the record in CUSTOMER_TARGET"
+						},
+						{
+							"name": "alterRow1"
+						}
+					],
+					"scriptLines": [
+						"source(output(",
+						"          CUSTOMER_ID as decimal(38,0),",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_CITY as string,",
+						"          ADDRESS as string,",
+						"          CONTACT_NUMBER as string,",
+						"          EMAIL_ID as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     format: 'table') ~> SOURCE",
+						"source(output(",
+						"          CUSTOMER_ID as decimal(38,0),",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_CITY as string,",
+						"          ADDRESS as string,",
+						"          CONTACT_NUMBER as string,",
+						"          EMAIL_ID as string,",
+						"          CUST_EFF_DATE as timestamp,",
+						"          CUST_END_DATE as timestamp,",
+						"          IS_ACTIVE as string",
+						"     ),",
+						"     allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     query: 'SELECT \\n    CUSTOMER_ID AS CUSTOMER_ID,\\n    CUSTOMER_NAME AS CUSTOMER_NAME,\\n    CUSTOMER_CITY AS CUSTOMER_CITY,\\n    ADDRESS AS ADDRESS,\\n    CONTACT_NUMBER AS CONTACT_NUMBER,\\n    EMAIL_ID AS EMAIL_ID,\\n    CUST_EFF_DATE AS CUST_EFF_DATE,\\n    CUST_END_DATE AS CUST_END_DATE,\\n    IS_ACTIVE AS IS_ACTIVE\\nFROM CUSTOMER_TARGET\\nWHERE IS_ACTIVE = \\'A\\'\\n\\n',",
+						"     format: 'query') ~> CustomerTraget",
+						"SOURCE, CustTable lookup(CUSTOMER_ID == LKP_CUSTOMER_ID,",
+						"     multiple: false,",
+						"     pickup: 'any',",
+						"     broadcast: 'auto')~> lookup",
+						"CustomerTraget select(mapColumn(",
+						"          LKP_CUSTOMER_ID = CUSTOMER_ID,",
+						"          LKP_CUSTOMER_NAME = CUSTOMER_NAME,",
+						"          LKP_CUSTOMER_CITY = CUSTOMER_CITY,",
+						"          LKP_ADDRESS = ADDRESS",
+						"     ),",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true) ~> CustTable",
+						"lookup derive(INSERT_FLAG = iif(isNull(LKP_CUSTOMER_ID),'TRUE','FALSE'),",
+						"          UPDATE_FLAG = iif(not(isNull(LKP_CUSTOMER_ID)) && \r",
+						"(CUSTOMER_CITY != LKP_CUSTOMER_CITY || ADDRESS != LKP_ADDRESS),'TRUE','FALSE')) ~> InsertOrUpdateFlag",
+						"InsertOrUpdateFlag split(INSERT_FLAG =='TRUE',",
+						"     UPDATE_FLAG=='TRUE',",
+						"     disjoint: false) ~> SplitInsertAndUpdate@(InserGroup, UpdateGroup, DEFAULT)",
+						"SplitInsertAndUpdate@InserGroup derive(CUST_EFF_DATE = currentTimestamp()) ~> derivedColumn1",
+						"derivedColumn3 derive(CUST_END_DATE = currentTimestamp(),",
+						"          IS_ACTIVE = 'N') ~> derivedColumn2",
+						"SplitInsertAndUpdate@UpdateGroup derive(CUST_EFF_DATE = currentTimestamp()) ~> derivedColumn3",
+						"derivedColumn2 alterRow(updateIf(not(isNull(LKP_CUSTOMER_ID))&&(CUSTOMER_CITY!=LKP_CUSTOMER_CITY||ADDRESS!=LKP_ADDRESS))) ~> alterRow1",
+						"derivedColumn1 sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          CUSTOMER_ID as decimal(38,0),",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_CITY as string,",
+						"          ADDRESS as string,",
+						"          CONTACT_NUMBER as string,",
+						"          EMAIL_ID as string,",
+						"          CUST_EFF_DATE as timestamp,",
+						"          CUST_END_DATE as timestamp,",
+						"          IS_ACTIVE as string",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true,",
+						"     mapColumn(",
+						"          CUSTOMER_ID,",
+						"          CUSTOMER_NAME,",
+						"          CUSTOMER_CITY,",
+						"          ADDRESS,",
+						"          CONTACT_NUMBER,",
+						"          EMAIL_ID,",
+						"          CUST_EFF_DATE",
+						"     )) ~> InsertNewRecordTGT",
+						"alterRow1 sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          CUSTOMER_ID as decimal(38,0),",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_CITY as string,",
+						"          ADDRESS as string,",
+						"          CONTACT_NUMBER as string,",
+						"          EMAIL_ID as string,",
+						"          CUST_EFF_DATE as timestamp,",
+						"          CUST_END_DATE as timestamp,",
+						"          IS_ACTIVE as string",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:false,",
+						"     updateable:true,",
+						"     upsertable:false,",
+						"     keys:['CUSTOMER_ID'],",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true,",
+						"     mapColumn(",
+						"          CUSTOMER_ID,",
+						"          CUST_END_DATE,",
+						"          IS_ACTIVE",
+						"     )) ~> UpdateOldRecordTGT",
+						"derivedColumn3 sink(allowSchemaDrift: true,",
+						"     validateSchema: false,",
+						"     input(",
+						"          CUSTOMER_ID as decimal(38,0),",
+						"          CUSTOMER_NAME as string,",
+						"          CUSTOMER_CITY as string,",
+						"          ADDRESS as string,",
+						"          CONTACT_NUMBER as string,",
+						"          EMAIL_ID as string,",
+						"          CUST_EFF_DATE as timestamp,",
+						"          CUST_END_DATE as timestamp,",
+						"          IS_ACTIVE as string",
+						"     ),",
+						"     deletable:false,",
+						"     insertable:true,",
+						"     updateable:false,",
+						"     upsertable:false,",
+						"     format: 'table',",
+						"     skipDuplicateMapInputs: true,",
+						"     skipDuplicateMapOutputs: true,",
+						"     stageInsert: true,",
+						"     mapColumn(",
+						"          CUSTOMER_ID,",
+						"          CUSTOMER_NAME,",
+						"          CUSTOMER_CITY,",
+						"          ADDRESS,",
+						"          CONTACT_NUMBER,",
+						"          EMAIL_ID,",
+						"          CUST_EFF_DATE",
+						"     )) ~> InsertChangedRecordTGT"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/CUSTOMER_STG')]",
+				"[concat(variables('factoryId'), '/datasets/CUSTOMER_TARGET')]"
+			]
+		}
+	]
+}
